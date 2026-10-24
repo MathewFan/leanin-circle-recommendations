@@ -98,4 +98,3 @@ Observed default results for the planted records:
 - [Schema and index rationale](SCHEMA.md), executable [schema.sql](schema.sql)
 - [AI collaboration disclosure](AI_USAGE.md)
 
-The folder is ready to upload to a GitHub repository. Generated databases and bytecode are ignored. No repository has been published and no email has been sent by this project.
