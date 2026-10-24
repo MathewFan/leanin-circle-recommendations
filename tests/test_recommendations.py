@@ -93,6 +93,19 @@ class RecommendationTests(unittest.TestCase):
         self.db.execute("UPDATE circles SET last_activity_at='2026-09-22T00:00:00Z'")
         self.assertEqual(self.ids(42), [])
 
+    def test_activity_time_boundaries(self):
+        self.db.execute("UPDATE circles SET access='unlisted' WHERE id != 1")
+        for timestamp, expected in (
+            ('2026-07-23T00:00:00Z', [1]),  # Exactly 60 days is eligible.
+            ('2026-07-22T23:59:59Z', []),
+            ('2026-09-21T00:00:00Z', [1]),  # Same instant, without milliseconds.
+            ('2026-09-21T00:00:00.000Z', [1]),
+            ('2026-09-21T00:00:01Z', []),
+        ):
+            with self.subTest(timestamp=timestamp):
+                self.db.execute('UPDATE circles SET last_activity_at=? WHERE id=1', (timestamp,))
+                self.assertEqual(self.ids(42), expected)
+
     def test_no_volume_and_chat_only(self):
         self.db.execute('UPDATE circles SET feed_posts_30d=0, chat_messages_30d=0 WHERE id=1')
         self.assertNotIn(1, self.ids(42, 20))
@@ -105,6 +118,8 @@ class RecommendationTests(unittest.TestCase):
     def test_unknown_user_and_limits(self):
         with self.assertRaises(LookupError):
             recommendations(self.db, 999)
+        with self.assertRaises(ValueError):
+            recommendations(self.db, 2**63)
         for limit in (0, 21, -1):
             with self.assertRaises(ValueError):
                 recommendations(self.db, 42, limit)
@@ -156,6 +171,7 @@ class HTTPTests(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertEqual(self.request('/users/7/recommendations?' + query)[0], 400)
         self.assertEqual(self.request('/users/999/recommendations')[0], 404)
+        self.assertEqual(self.request('/users/9223372036854775808/recommendations')[0], 400)
         self.assertEqual(self.request('/unknown')[0], 404)
 
 

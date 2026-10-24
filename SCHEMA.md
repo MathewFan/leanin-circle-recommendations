@@ -22,7 +22,7 @@ The Circle's main topic uses the existing unique slug as a foreign key rather th
 - `memberships(user_id, circle_id)` supports membership fallback and eligibility exclusions without another user index.
 - `memberships_circle(circle_id, role)` supports reverse member/leader lookup and future Circle detail queries.
 - `circle_tags(circle_id, tag)` supports tag lookup while eliminating repeated tags in the source.
-- `circles_discovery(access, last_activity_at)` supports public discovery and a future SQL recency filter; today the application computes recency after the public/capacity/membership SQL filter. At 40 Circles a scan is inexpensive.
+- `circles_discovery(access, last_activity_at)` supports public discovery and a future SQL recency filter; today SQL filters the activity window using `julianday` for consistent timestamp parsing, so the index helps with visibility but its timestamp part does not accelerate that expression. At 40 Circles a scan is inexpensive.
 - `activity_circle_time(circle_id, created_at)` supports activity-window aggregation as data refreshes. Ranking currently uses the supplied post/chat aggregates rather than counting the partial feed sample.
 
 SQLite CHECK constraints validate enumerated roles/formats/policies, nonnegative activity and member counts, positive capacity, and profile completeness. Capacity is allowed to be below an existing count: an over-capacity Circle is valid stored state and must be excluded from discovery.

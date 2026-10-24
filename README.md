@@ -23,7 +23,7 @@ The server binds to localhost. Stop with Ctrl+C. If port 8000 is busy, use `pyth
 
 `GET /users/{user_id}/recommendations?limit=5`
 
-- `user_id`: positive integer identifying an existing member.
+- `user_id`: positive integer identifying an existing member, up to SQLite’s maximum of `9223372036854775807`. Larger IDs return 400.
 - `limit`: optional integer from 1 to 20; default 5. Unknown or repeated parameters return 400.
 - Returns 200 with `user_id`, `snapshot_at`, `algorithm_version`, `strategy`, and `recommendations`.
 - Each recommendation contains a consecutive `rank`, public Circle details, a numeric `score`, and a short member-facing `explanation`.
@@ -69,7 +69,7 @@ The thresholds and weights are understandable initial heuristics, not learned or
 
 The generator fixes `ANCHOR` at **2026-09-21 00:00 UTC**. The seed records that time as database metadata, and every response reports it. Activity aggregates describe that snapshot, so using today's clock would incorrectly age an unchanged demo. For production, refresh aggregates and their as-of time together; changing only the clock would misrepresent 30-day counts.
 
-`member_count` is authoritative for capacity. The supplied membership rows do not always total that aggregate, so the API does not substitute a row count. Join availability can change after recommendation; the actual join operation must recheck capacity atomically.
+`member_count` is authoritative for capacity. The supplied membership rows match that aggregate; the API uses the stored count to avoid recounting memberships during recommendation requests. Join availability can change after recommendation; the actual join operation must recheck capacity atomically.
 
 Circle meeting location and member format preferences are absent. The API returns the format but does not claim geographic suitability; meeting location needs confirmation before joining an in-person or hybrid Circle. It does not infer gender, race, parenting status, or career stage from names, biographies, or titles. Profile completeness and photos do not affect opportunity to receive recommendations. There is no network dataset.
 
@@ -81,7 +81,7 @@ This is a local demo: it has no authentication or authorization. Production must
 python3 -m unittest discover -s tests -v
 ```
 
-Eleven tests cover real HTTP responses, validation, all 100 users, eligibility, capacity boundaries, chat-only activity, deterministic ranking, membership fallback, empty pools, schema relationships, and seed overwrite protection. The inactive fixture is also tested after making it public so its unlisted status cannot mask a broken activity filter.
+Twelve tests cover real HTTP responses, validation, all 100 users, eligibility, capacity boundaries, chat-only activity, deterministic ranking, membership fallback, empty pools, schema relationships, seed overwrite protection, oversized user IDs, and activity-window boundaries. The inactive fixture is also tested after making it public so its unlisted status cannot mask a broken activity filter.
 
 Observed default results for the planted records:
 

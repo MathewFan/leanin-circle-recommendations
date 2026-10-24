@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 
 VERSION = 'topics-activity-v1'
+MAX_USER_ID = 2**63 - 1  # SQLite INTEGER range.
 
 
 def parse_time(value):
@@ -13,29 +14,32 @@ def parse_time(value):
 def recommendations(db, user_id, limit=5):
     if not 1 <= limit <= 20:
         raise ValueError('limit must be between 1 and 20')
+    if not 1 <= user_id <= MAX_USER_ID:
+        raise ValueError('user_id must be between 1 and 9223372036854775807')
     if not db.execute('SELECT 1 FROM users WHERE id = ?', (user_id,)).fetchone():
         raise LookupError('User not found')
     snapshot = db.execute("SELECT value FROM metadata WHERE key = 'snapshot_at'").fetchone()[0]
     now = parse_time(snapshot)
     labels = {r['slug']: r['label'] for r in db.execute('SELECT slug, label FROM topics')}
     explicit = {r[0] for r in db.execute('SELECT topic_slug FROM user_interests WHERE user_id = ?', (user_id,))}
-    inferred = {r[0] for r in db.execute('SELECT DISTINCT c.topic FROM memberships m JOIN circles c ON c.id=m.circle_id WHERE m.user_id=? AND c.topic IS NOT NULL', (user_id,))}
+    inferred = set()
+    if not explicit:
+        inferred = {r[0] for r in db.execute('SELECT DISTINCT c.topic FROM memberships m JOIN circles c ON c.id=m.circle_id WHERE m.user_id=? AND c.topic IS NOT NULL', (user_id,))}
     interests = explicit or inferred
     strength = 1.0 if explicit else 0.35
     tags = defaultdict(set)
     for r in db.execute('SELECT circle_id, tag FROM circle_tags'):
         tags[r[0]].add(r[1])
     candidates = []
-    # member_count is the source's authoritative capacity aggregate; the membership
-    # sample is intentionally not a complete replacement for that aggregate.
+    # Use the supplied capacity aggregate without recounting memberships per Circle.
     rows = db.execute('''SELECT c.* FROM circles c WHERE access='public'
         AND (max_members IS NULL OR member_count < max_members)
-        AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id=? AND m.circle_id=c.id)''', (user_id,))
+        AND feed_posts_30d + chat_messages_30d > 0
+        AND julianday(last_activity_at) BETWEEN julianday(?, '-60 days') AND julianday(?)
+        AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id=? AND m.circle_id=c.id)''', (snapshot, snapshot, user_id))
     for row in rows:
         c = dict(row)
         age = (now - parse_time(c['last_activity_at'])).total_seconds() / 86400
-        if age < 0 or age > 60 or c['feed_posts_30d'] + c['chat_messages_30d'] == 0:
-            continue
         primary = c['topic'] in interests
         matched = interests & (tags[c['id']] | ({c['topic']} if c['topic'] else set()))
         relevance = strength * ((65 if primary else 39 if matched else 0) + min(5, 5 * max(0, len(matched) - 1)))
