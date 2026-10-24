@@ -96,5 +96,4 @@ Observed default results for the planted records:
 
 - [One-page technical design](DESIGN.md)
 - [Schema and index rationale](SCHEMA.md), executable [schema.sql](schema.sql)
-- [AI collaboration disclosure](AI_USAGE.md)
 
